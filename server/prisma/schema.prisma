@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SourceType {
+  TEXT
+  URL
+  PDF
+  DOCX
+  IMAGE
+}
+
+enum SummaryType {
+  QUICK
+  DETAILED
+  BULLETS
+  TLDR
+  KEY_TAKEAWAYS
+  EXECUTIVE
+  ELI_BEGINNER
+}
+
+enum SummaryLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+enum SummaryTone {
+  SIMPLE
+  PROFESSIONAL
+  ACADEMIC
+}
+
+enum SummaryStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Role {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  dailyLimit  Int        @default(20)
+  permissions String[]
+  isSystem    Boolean    @default(false)
+  status      RoleStatus @default(ACTIVE)
+  users       User[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status])
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  passwordHash   String?
+  name           String
+  avatarUrl      String?
+  googleId       String?         @unique
+  emailVerified  Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  roleId         String
+  role           Role            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  summaries      Summary[]
+  bookmarks      Bookmark[]
+  usageLogs      UsageLog[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  refreshTokens  RefreshToken[]
+  passwordResets PasswordReset[]
+  lastLoginAt    DateTime?
+  quotaResetAt   DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([roleId])
+  @@index([createdAt])
+}
+
+model Summary {
+  id          String        @id @default(cuid())
+  userId      String?
+  guestSid    String?
+  user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  sourceType  SourceType
+  sourceMeta  Json
+  inputText   String        @db.Text
+  output      String        @db.Text
+  summaryType SummaryType
+  length      SummaryLength
+  tone        SummaryTone
+  language    String
+  tokensIn    Int?
+  tokensOut   Int?
+  model       String
+  status      SummaryStatus @default(COMPLETED)
+  bookmarks   Bookmark[]
+  createdAt   DateTime      @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([guestSid])
+  @@index([summaryType])
+  @@index([status])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  summaryId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary   Summary  @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, summaryId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model UsageLog {
+  id         String     @id @default(cuid())
+  userId     String?
+  guestSid   String?
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String
+  sourceType SourceType
+  createdAt  DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([guestSid, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  metadata  Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  family     String
+  userAgent  String?
+  ip         String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([family])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
