@@ -9,12 +9,13 @@ const devFormat = printf(({ level, message, timestamp: ts, stack, ...rest }) => 
   return `${ts} ${level} ${stack || message}${meta}`;
 });
 
-export const logger = winston.createLogger({
-  level: env.isProd ? 'info' : 'debug',
-  defaultMeta: { service: 'ai-summarizer-api' },
-  format: combine(timestamp(), errors({ stack: true }), env.isProd ? json() : combine(colorize(), devFormat)),
-  transports: [
-    new winston.transports.Console(),
+// In production (Railway/Vercel-style platforms) the container filesystem is
+// ephemeral and stdout is captured by the platform — file transports just waste
+// disk and disappear on every redeploy. Local/dev keeps the rotating files for
+// inspection.
+const transports = [new winston.transports.Console()];
+if (!env.isProd) {
+  transports.push(
     new DailyRotateFile({
       filename: 'logs/error-%DATE%.log',
       level: 'error',
@@ -30,7 +31,14 @@ export const logger = winston.createLogger({
       maxFiles: '7d',
       zippedArchive: true,
     }),
-  ],
+  );
+}
+
+export const logger = winston.createLogger({
+  level: env.isProd ? 'info' : 'debug',
+  defaultMeta: { service: 'ai-summarizer-api' },
+  format: combine(timestamp(), errors({ stack: true }), env.isProd ? json() : combine(colorize(), devFormat)),
+  transports,
   exitOnError: false,
 });
 

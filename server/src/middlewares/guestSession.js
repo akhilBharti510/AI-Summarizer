@@ -30,7 +30,8 @@ export const guestSession = session({
   }),
   cookie: {
     httpOnly: true,
-    sameSite: 'lax',
+    // Cross-site cookies (Vercel ↔ Railway) require SameSite=None + Secure.
+    sameSite: env.COOKIE_SECURE ? 'none' : 'lax',
     secure: env.COOKIE_SECURE,
     domain: env.COOKIE_DOMAIN || undefined,
     // no maxAge → browser session cookie

@@ -58,6 +58,32 @@ if (!parsed.success) {
 
 const e = parsed.data;
 
+// Production hardening: things that are merely "weird" in dev are deploy-breakers in prod.
+if (e.NODE_ENV === 'production') {
+  const prodIssues = [];
+  if (!e.COOKIE_SECURE) prodIssues.push('COOKIE_SECURE must be "true" in production (cross-site cookies require Secure).');
+  if (/replace-me/i.test(e.JWT_ACCESS_SECRET) || /replace-me/i.test(e.JWT_REFRESH_SECRET)) {
+    prodIssues.push('JWT secrets are still the example placeholders — rotate to random 64-byte values.');
+  }
+  if (/replace-me/i.test(e.SESSION_SECRET)) {
+    prodIssues.push('SESSION_SECRET is still the example placeholder.');
+  }
+  if (/localhost|127\.0\.0\.1/.test(e.OAUTH_SUCCESS_REDIRECT) || /localhost|127\.0\.0\.1/.test(e.OAUTH_FAILURE_REDIRECT)) {
+    prodIssues.push('OAUTH_*_REDIRECT still points at localhost.');
+  }
+  if (e.CORS_ORIGINS.split(',').some((o) => /localhost|127\.0\.0\.1/.test(o))) {
+    prodIssues.push('CORS_ORIGINS contains a localhost entry — production should only allow your public frontend origin(s).');
+  }
+  if (e.ADMIN_PASSWORD === 'ChangeMe!2025') {
+    prodIssues.push('ADMIN_PASSWORD is still the seed default — rotate before db:seed.');
+  }
+  if (prodIssues.length) {
+    // eslint-disable-next-line no-console
+    console.error('❌ Production env validation failed:\n  - ' + prodIssues.join('\n  - '));
+    process.exit(1);
+  }
+}
+
 export const env = {
   ...e,
   isProd: e.NODE_ENV === 'production',

@@ -6,6 +6,7 @@
   "engines": { "node": ">=20.0.0" },
   "scripts": {
     "dev": "nodemon --watch src --watch prisma --ext js,json,prisma src/server.js",
+    "prestart": "prisma migrate deploy",
     "start": "node src/server.js",
     "build": "prisma generate",
     "lint": "eslint \"src/**/*.js\"",

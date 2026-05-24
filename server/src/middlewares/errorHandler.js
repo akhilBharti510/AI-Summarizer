@@ -49,11 +49,18 @@ export function errorHandler(err, req, res, _next) {
     });
   }
 
+  // In production, mask the raw message for 5xx (it can leak DB column names,
+  // library internals, file paths). Full error is still logged above.
+  const publicMessage =
+    env.isProd && apiErr.statusCode >= 500 && !(err instanceof ApiError)
+      ? 'Internal server error'
+      : apiErr.message;
+
   res.status(apiErr.statusCode).json({
     success: false,
     error: {
       code: apiErr.code,
-      message: apiErr.message,
+      message: publicMessage,
       ...(apiErr.details ? { details: apiErr.details } : {}),
       ...(env.isDev && apiErr.statusCode >= 500 ? { stack: err.stack } : {}),
     },

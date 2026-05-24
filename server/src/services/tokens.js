@@ -30,10 +30,13 @@ function signRefresh(user, family, jti) {
 }
 
 function cookieOpts(maxAgeMs, path = '/') {
+  // Cross-site (Vercel frontend ↔ Railway API) requires SameSite=None + Secure.
+  // Same-site dev (localhost ↔ localhost) keeps Lax — browsers reject SameSite=None
+  // over plain HTTP.
   return {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: 'lax',
+    sameSite: env.COOKIE_SECURE ? 'none' : 'lax',
     domain: env.COOKIE_DOMAIN || undefined,
     path,
     maxAge: maxAgeMs,
