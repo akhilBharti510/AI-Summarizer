@@ -13,6 +13,7 @@ import {
 } from '../../services/tokens.js';
 import { sendMail, buildResetEmail } from '../../services/mailer.js';
 import { writeAudit } from '../../utils/audit.js';
+import { logger } from '../../config/logger.js';
 
 const BCRYPT_ROUNDS = 12;
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -102,7 +103,18 @@ export async function requestPasswordReset({ email, req }) {
   });
   const link = `${env.APP_URL}/reset-password?token=${rawToken}`;
   const { text, html } = buildResetEmail({ name: user.name, link });
-  await sendMail({ to: user.email, subject: 'Reset your AI Summarizer password', text, html });
+  // Do NOT fail the endpoint if SMTP is misconfigured/unreachable. Log it, audit
+  // the attempt, and still return the anti-enumeration generic response. The
+  // mailer enforces a hard ~9s timeout so we never hold the request open.
+  try {
+    await sendMail({ to: user.email, subject: 'Reset your AI Summarizer password', text, html });
+  } catch (err) {
+    logger.error('Password reset email failed to send', {
+      userId: user.id,
+      code: err.code,
+      message: err.message,
+    });
+  }
   writeAudit({ actorId: user.id, action: 'auth.password_reset.requested', target: user.id, req });
 }
 

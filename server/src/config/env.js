@@ -36,6 +36,11 @@ const schema = z.object({
 
   SMTP_HOST: z.string().optional().or(z.literal('')),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
+  // Optional explicit override; when unset the mailer derives secure=(port===465).
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? undefined : v === 'true')),
   SMTP_USER: z.string().optional().or(z.literal('')),
   SMTP_PASS: z.string().optional().or(z.literal('')),
   MAIL_FROM: z.string().default('AI Summarizer <no-reply@example.com>'),
