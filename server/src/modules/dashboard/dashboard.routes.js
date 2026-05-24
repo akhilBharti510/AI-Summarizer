@@ -22,7 +22,8 @@ router.get(
     const limit = req.user.role?.dailyLimit ?? 0;
 
     const [usedToday, totalSummaries, totalBookmarks, recent, unreadNotifications] = await Promise.all([
-      prisma.summary.count({ where: { userId, status: 'COMPLETED', createdAt: { gte: since } } }),
+      // Quota usage is measured from append-only UsageLog so deletions don't refund quota.
+      prisma.usageLog.count({ where: { userId, action: 'summary.create', createdAt: { gte: since } } }),
       prisma.summary.count({ where: { userId, status: 'COMPLETED' } }),
       prisma.bookmark.count({ where: { userId } }),
       prisma.summary.findMany({

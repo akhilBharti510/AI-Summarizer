@@ -10,9 +10,12 @@ function startOfTodayUtc() {
 
 /**
  * Enforces per-role daily limits.
- *  - Authenticated: counts user's COMPLETED summaries today against role.dailyLimit.
- *  - Guest (no req.user): counts summaries linked to the session id against Guest role's limit.
+ *  - Authenticated: counts user's generations today against role.dailyLimit.
+ *  - Guest (no req.user): counts generations linked to the session id against Guest role's limit.
  *  - dailyLimit === -1 → unlimited.
+ *
+ * Usage is measured against the append-only UsageLog (action='summary.create'),
+ * NOT the Summary table — deleting a stored summary must not refund quota.
  *
  * On first exceed of the day, writes a single 'limit.exceeded' notification (auth only).
  */
@@ -24,8 +27,8 @@ export async function quotaGuard(req, _res, next) {
       const limit = req.user.role?.dailyLimit ?? 0;
       if (limit === -1) return next();
       const since = req.user.quotaResetAt && req.user.quotaResetAt > today ? req.user.quotaResetAt : today;
-      const used = await prisma.summary.count({
-        where: { userId: req.user.id, status: 'COMPLETED', createdAt: { gte: since } },
+      const used = await prisma.usageLog.count({
+        where: { userId: req.user.id, action: 'summary.create', createdAt: { gte: since } },
       });
       if (used >= limit) {
         await notifyOnce(req.user.id, limit);
@@ -47,8 +50,8 @@ export async function quotaGuard(req, _res, next) {
     const guestRole = await prisma.role.findUnique({ where: { name: ROLES.GUEST } });
     const limit = guestRole?.dailyLimit ?? 3;
     if (limit === -1) return next();
-    const used = await prisma.summary.count({
-      where: { guestSid: sid, status: 'COMPLETED' },
+    const used = await prisma.usageLog.count({
+      where: { guestSid: sid, action: 'summary.create' },
     });
     if (used >= limit) {
       return next(
