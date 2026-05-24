@@ -35,7 +35,17 @@ export const create = asyncHandler(async (req, res) => {
 
 export const regenerate = asyncHandler(async (req, res) => {
   const summary = await svc.regenerate({ id: req.params.id, options: req.body, req });
-  return created(res, { summary: { id: summary.id, title: summary.title, output: summary.output, createdAt: summary.createdAt } });
+  return created(res, {
+    summary: {
+      id: summary.id,
+      title: summary.title,
+      output: summary.output,
+      createdAt: summary.createdAt,
+      parentId: summary.parentId,
+      rootId: summary.rootId,
+      version: summary.version,
+    },
+  });
 });
 
 export const list = asyncHandler(async (req, res) => {

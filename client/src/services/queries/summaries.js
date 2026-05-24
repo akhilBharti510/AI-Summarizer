@@ -39,7 +39,13 @@ export const useRegenerateSummary = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, options }) => unwrap(api.post(`/summaries/${id}/regenerate`, options || {})),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['summaries'] }),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['summaries'] });
+      qc.invalidateQueries({ queryKey: ['summary'] });
+      qc.invalidateQueries({ queryKey: ['summary', id] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
   });
 };
 

@@ -22,7 +22,7 @@ import {
 import { getApiErrorMessage, formatDate } from '../../lib/utils.js';
 import ConfirmDialog from '../../components/common/ConfirmDialog.jsx';
 
-export default function SummaryDetail({ id, open, onOpenChange }) {
+export default function SummaryDetail({ id, open, onOpenChange, onIdChange }) {
   const { data, isLoading, error, refetch } = useSummary(id);
   const summary = data?.summary;
   const rename = useRenameSummary();
@@ -79,6 +79,12 @@ export default function SummaryDetail({ id, open, onOpenChange }) {
                 <Badge variant="outline">{summary.length}</Badge>
                 <Badge variant="outline">{summary.tone}</Badge>
                 <Badge variant="outline">{summary.language}</Badge>
+                {(summary.version > 1 || (summary.versions?.length ?? 0) > 1) && (
+                  <Badge>
+                    Version {summary.version}
+                    {summary.version > 1 ? ' (Regenerated)' : ''}
+                  </Badge>
+                )}
               </div>
             )}
           </DialogHeader>
@@ -96,6 +102,33 @@ export default function SummaryDetail({ id, open, onOpenChange }) {
             <p className="text-xs text-muted-foreground">Created {formatDate(summary.createdAt)}</p>
           )}
 
+          {summary && summary.versions && summary.versions.length > 1 && (
+            <div className="rounded-md border bg-secondary/30 p-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Versions
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {summary.versions.map((v) => {
+                  const active = v.id === summary.id;
+                  return (
+                    <Button
+                      key={v.id}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      disabled={active}
+                      onClick={() => onIdChange?.(v.id)}
+                      title={`${v.summaryType} · ${v.length} · ${v.tone} · ${v.language}`}
+                    >
+                      v{v.version}
+                      {v.version > 1 ? ' · Regenerated' : ''}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="flex flex-wrap gap-2 sm:justify-between">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => downloadExport(id, 'txt')}><FileDown className="mr-2 h-4 w-4" /> TXT</Button>
@@ -107,14 +140,21 @@ export default function SummaryDetail({ id, open, onOpenChange }) {
                   disabled={regen.isPending}
                   onClick={async () => {
                     try {
-                      await regen.mutateAsync({ id, options: {} });
-                      toast.success('Regenerated — see History');
+                      const res = await regen.mutateAsync({ id, options: {} });
+                      const newId = res?.summary?.id;
+                      toast.success(
+                        res?.summary?.version
+                          ? `Version ${res.summary.version} ready`
+                          : 'Regenerated',
+                      );
+                      if (newId && onIdChange) onIdChange(newId);
                     } catch (err) {
                       toast.error(getApiErrorMessage(err));
                     }
                   }}
                 >
-                  <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
+                  <RefreshCw className={`mr-2 h-4 w-4 ${regen.isPending ? 'animate-spin' : ''}`} />
+                  {regen.isPending ? 'Regenerating…' : 'Regenerate'}
                 </Button>
               )}
             </div>

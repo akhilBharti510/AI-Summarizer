@@ -108,6 +108,14 @@ model Summary {
   tokensOut   Int?
   model       String
   status      SummaryStatus @default(COMPLETED)
+  // Version chain for regenerate. v1 has parentId=null, version=1.
+  // rootId always points at v1's id once the chain has ≥2 versions, so the whole
+  // chain is fetchable with `WHERE rootId = root.id OR id = root.id`.
+  parentId    String?
+  parent      Summary?      @relation("SummaryVersions", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Summary[]     @relation("SummaryVersions")
+  rootId      String?
+  version     Int           @default(1)
   bookmarks   Bookmark[]
   createdAt   DateTime      @default(now())
 
@@ -115,6 +123,8 @@ model Summary {
   @@index([guestSid])
   @@index([summaryType])
   @@index([status])
+  @@index([rootId])
+  @@index([parentId])
 }
 
 model Bookmark {

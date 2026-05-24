@@ -76,7 +76,7 @@ async function runAi(input, extracted) {
   }
 }
 
-export async function createSummary({ input, file, req }) {
+export async function createSummary({ input, file, req, parent = null }) {
   const extracted = await extract(input, file);
   const title = deriveTitle(input, extracted);
 
@@ -126,7 +126,17 @@ export async function createSummary({ input, file, req }) {
   if (req.user) data.userId = req.user.id;
   else data.guestSid = req.sessionID;
 
-  const [summary] = await prisma.$transaction([
+  // Version-chain wiring when called via regenerate().
+  if (parent) {
+    data.parentId = parent.id;
+    data.version = (parent.version ?? 1) + 1;
+    data.rootId = parent.rootId ?? parent.id;
+  }
+
+  // Build the transaction. When this is a regenerate against a v1 that has no
+  // rootId yet, backfill the parent's rootId so the whole chain is fetchable
+  // with a single `WHERE rootId = root.id` query.
+  const ops = [
     prisma.summary.create({ data }),
     prisma.usageLog.create({
       data: {
@@ -136,7 +146,13 @@ export async function createSummary({ input, file, req }) {
         sourceType: input.sourceType,
       },
     }),
-  ]);
+  ];
+  if (parent && !parent.rootId) {
+    ops.push(
+      prisma.summary.update({ where: { id: parent.id }, data: { rootId: parent.id } }),
+    );
+  }
+  const [summary] = await prisma.$transaction(ops);
 
   if (req.user) {
     await prisma.notification
@@ -180,7 +196,7 @@ export async function regenerate({ id, options, req }) {
     tone: options.tone ?? existing.tone,
     language: options.language ?? existing.language,
   };
-  return createSummary({ input, file: null, req });
+  return createSummary({ input, file: null, req, parent: existing });
 }
 
 export async function listSummaries({ q, type, sourceType, from, to, page, limit, req }) {
@@ -210,7 +226,27 @@ export async function listSummaries({ q, type, sourceType, from, to, page, limit
 
 export async function getSummary({ id, req }) {
   const summary = await getOwned(id, req, true);
-  return serialize(summary, { includeOutput: true });
+  // Fetch the version chain (root + descendants). For a v1 that's never been
+  // regenerated, rootId is still null — that's fine, the chain is just [self].
+  const baseRoot = summary.rootId ?? summary.id;
+  const versionRows = await prisma.summary.findMany({
+    where: {
+      OR: [{ id: baseRoot }, { rootId: baseRoot }],
+      // Same owner — getOwned already authorized this user; chain inherits that.
+      ...(summary.userId ? { userId: summary.userId } : { guestSid: summary.guestSid }),
+    },
+    orderBy: { version: 'asc' },
+    select: {
+      id: true,
+      version: true,
+      summaryType: true,
+      length: true,
+      tone: true,
+      language: true,
+      createdAt: true,
+    },
+  });
+  return serialize(summary, { includeOutput: true, versions: versionRows });
 }
 
 export async function renameSummary({ id, title, req }) {
@@ -270,7 +306,7 @@ async function getOwned(id, req, fullInclude = false) {
 
 export { getOwned };
 
-function serialize(s, { includeOutput }) {
+function serialize(s, { includeOutput, versions }) {
   return {
     id: s.id,
     title: s.title,
@@ -282,8 +318,12 @@ function serialize(s, { includeOutput }) {
     language: s.language,
     model: s.model,
     status: s.status,
+    parentId: s.parentId ?? null,
+    rootId: s.rootId ?? null,
+    version: s.version ?? 1,
     bookmarked: Array.isArray(s.bookmarks) ? s.bookmarks.length > 0 : undefined,
     ...(includeOutput ? { output: s.output, inputPreview: s.inputText?.slice(0, 1000) } : {}),
+    ...(versions ? { versions } : {}),
     createdAt: s.createdAt,
   };
 }

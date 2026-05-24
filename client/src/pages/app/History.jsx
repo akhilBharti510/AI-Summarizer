@@ -49,6 +49,12 @@ export default function History() {
 
   const activeId = sp.get('id');
   const closeDetail = () => { sp.delete('id'); setSp(sp, { replace: true }); };
+  const setActiveId = (newId) => {
+    if (!newId) return closeDetail();
+    sp.set('id', newId);
+    setSp(sp, { replace: true });
+  };
+  const [regenInFlight, setRegenInFlight] = useState(() => new Set());
 
   return (
     <div className="space-y-6">
@@ -103,10 +109,24 @@ export default function History() {
                 catch (e) { toast.error(getApiErrorMessage(e)); }
               }}
               onRegenerate={async () => {
+                if (regenInFlight.has(s.id)) return;
+                setRegenInFlight((prev) => new Set(prev).add(s.id));
                 try {
-                  await regen.mutateAsync({ id: s.id, options: {} });
-                  toast.success('Regenerated');
-                } catch (e) { toast.error(getApiErrorMessage(e)); }
+                  const res = await regen.mutateAsync({ id: s.id, options: {} });
+                  const newId = res?.summary?.id;
+                  toast.success(
+                    res?.summary?.version ? `Version ${res.summary.version} ready` : 'Regenerated',
+                  );
+                  if (newId) setActiveId(newId);
+                } catch (e) {
+                  toast.error(getApiErrorMessage(e));
+                } finally {
+                  setRegenInFlight((prev) => {
+                    const next = new Set(prev);
+                    next.delete(s.id);
+                    return next;
+                  });
+                }
               }}
               onExport={(summary, fmt) => downloadExport(summary.id, fmt)}
             />
@@ -116,7 +136,12 @@ export default function History() {
 
       <Pagination pagination={data?.meta?.pagination} onChange={setPage} />
 
-      <SummaryDetail id={activeId} open={Boolean(activeId)} onOpenChange={(o) => !o && closeDetail()} />
+      <SummaryDetail
+        id={activeId}
+        open={Boolean(activeId)}
+        onIdChange={setActiveId}
+        onOpenChange={(o) => !o && closeDetail()}
+      />
     </div>
   );
 }

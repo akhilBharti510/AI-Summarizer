@@ -36,6 +36,7 @@ export default function Summarize() {
       <SummaryDetail
         id={createdId}
         open={Boolean(createdId)}
+        onIdChange={(newId) => setCreatedId(newId)}
         onOpenChange={(o) => {
           if (!o) {
             setCreatedId(null);
