@@ -11,11 +11,16 @@ import { env } from '../config/env.js';
  * /reset-password, /google* — those run before the client can fetch a token,
  * and are protected by SameSite=Lax + strict CORS origin allowlist.
  */
+// Cross-site SPA (Vercel) ↔ API (Railway) means Lax cookies aren't sent on
+// fetch POSTs. Use SameSite=None+Secure in prod so the _csrf cookie round-trips;
+// keep Lax in dev (browsers reject None over plain HTTP).
+const crossSiteSameSite = env.COOKIE_SECURE ? 'none' : 'lax';
+
 export const csrfProtection = csurf({
   cookie: {
     key: '_csrf',
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: crossSiteSameSite,
     secure: env.COOKIE_SECURE,
     domain: env.COOKIE_DOMAIN || undefined,
     path: '/',
@@ -28,7 +33,7 @@ export function issueCsrfToken(req, res) {
   const token = req.csrfToken();
   res.cookie('XSRF-TOKEN', token, {
     httpOnly: false, // readable by JS so the client can echo it in a header
-    sameSite: 'lax',
+    sameSite: crossSiteSameSite,
     secure: env.COOKIE_SECURE,
     domain: env.COOKIE_DOMAIN || undefined,
     path: '/',
