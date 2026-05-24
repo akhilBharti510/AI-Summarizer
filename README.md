@@ -134,4 +134,7 @@ Admins can create arbitrary custom roles (Researcher, Editor…) with their own 
 
 ## License
 
-Proprietary. Internal use only.
+Proprietary. All rights reserved.
+
+This software is proprietary and intended for internal or evaluation purposes only.
+Unauthorized copying, modification, distribution, or commercial use is prohibited without permission from the owner.
